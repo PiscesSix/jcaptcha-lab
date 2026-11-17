@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JCaptcha Lab</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#1d1d1f; --mute:#6b6b70; --line:#e3e3e0; --ok:#1f7a4d; --bad:#b3261e; --warn:#a15c00; --acc:#22305a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); background:var(--card); display:flex; align-items:baseline; gap:12px; }
+  header h1 { margin:0; font-size:18px; }
+  header span { color:var(--mute); font-size:13px; }
+  main { display:grid; grid-template-columns: 380px 1fr; gap:16px; padding:16px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .card h2 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); }
+  .cap { display:flex; gap:8px; align-items:center; }
+  .cap img { width:200px; height:60px; border:1px solid var(--line); border-radius:4px; background:#eee; image-rendering:auto; }
+  .id { font:12px ui-monospace, monospace; color:var(--mute); word-break:break-all; margin:8px 0 12px; }
+  .row { display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  input { flex:1; min-width:120px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  button { padding:8px 12px; border:1px solid var(--line); background:#fafaf8; border-radius:6px; font:inherit; cursor:pointer; }
+  button:hover { background:#efefec; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.debug { border-style:dashed; }
+  .result { min-height:22px; font-weight:600; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  .stats { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+  .stat { background:var(--bg); border-radius:6px; padding:8px; }
+  .stat b { display:block; font-size:18px; }
+  .stat small { color:var(--mute); }
+  .gallery { display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:8px; }
+  .gallery img { width:100%; border:1px solid var(--line); border-radius:4px; cursor:pointer; }
+  table { width:100%; border-collapse:collapse; font:12px ui-monospace, monospace; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mute); font-weight:500; position:sticky; top:0; background:var(--card); }
+  tr.req { cursor:pointer; } tr.req:hover { background:#fafaf8; }
+  .logwrap { max-height:420px; overflow:auto; }
+  pre { margin:0; white-space:pre-wrap; word-break:break-all; color:var(--mute); }
+  .s2 { color:var(--ok); } .s4 { color:var(--warn); } .s5 { color:var(--bad); }
+  .hint { color:var(--mute); font-size:12px; margin-top:6px; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+</style>
+</head>
+<body>
+<header><h1>JCaptcha Lab</h1><span>test captcha · test ảnh · test request</span></header>
+
+<main>
+  <div class="col">
+    <section class="card">
+      <h2>Captcha</h2>
+      <div class="cap"><img id="img" alt="captcha"></div>
+      <div class="id" id="idText">id: —</div>
+      <div class="row">
+        <button class="primary" id="btnNew">Captcha mới</button>
+        <button id="btnReload" title="Gọi lại ảnh với CÙNG id — JCaptcha sẽ sinh captcha mới thay cái cũ">Tải lại ảnh (cùng id)</button>
+      </div>
+      <div class="row">
+        <input id="answer" placeholder="Nhập mã trong ảnh" autocomplete="off">
+        <button class="primary" id="btnVerify">Kiểm tra</button>
+      </div>
+      <div class="row">
+        <button id="btnReuse" title="Gửi lại verify cho id vừa kiểm tra — phải ra unknown_id">Verify lại id cũ</button>
+        <button id="btnBogus" title="Verify một id chưa từng gọi ảnh">Verify id bịa</button>
+      </div>
+      <div class="row" id="debugRow" hidden>
+        <button class="debug" id="btnPeek">Xem đáp án (debug)</button>
+        <button class="debug" id="btnAuto">Tự giải đúng (debug)</button>
+      </div>
+      <div class="result" id="result"></div>
+      <div class="hint" id="debugHint"></div>
+    </section>
+
+    <section class="card">
+      <h2>Thống kê service</h2>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="card">
+      <h2>Test tải</h2>
+      <div class="row">
+        <input id="burstN" type="number" value="80" min="1" max="500" style="max-width:90px">
+        <button id="btnBurst" title="Bắn N request verify sai liên tục để xem rate limit (429)">Bắn N verify</button>
+      </div>
+      <div class="result" id="burstResult"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <h2>Request log <button id="btnClear" style="float:right;padding:2px 8px;font-size:12px">Xóa</button></h2>
+      <div class="logwrap">
+        <table>
+          <thead><tr><th>giờ</th><th>method</th><th>url</th><th>status</th><th>ms</th><th>response</th></tr></thead>
+          <tbody id="log"></tbody>
+        </table>
+      </div>
+      <div class="hint">Bấm vào dòng để xem body đầy đủ.</div>
+    </section>
+
+    <section class="card">
+      <h2>Gallery <button id="btnGallery" style="float:right;padding:2px 8px;font-size:12px">Sinh 12 ảnh</button></h2>
+      <div class="gallery" id="gallery"></div>
+      <div class="hint">Mỗi ảnh có id riêng. Bấm vào ảnh để đưa lên ô captcha và kiểm tra.</div>
+    </section>
+  </div>
+</main>
+
+<script>
+const API = { newId: '/rest/v2/applicants/jcaptcha', verify: '/rest/v2/applicants/jcaptcha/verify' };
+const $ = (id) => document.getElementById(id);
+let currentId = null, lastVerifiedId = null, debug = false;
+
+// ---- fetch có ghi log -------------------------------------------------------
+async function call(method, url, body, { log = true } = {}) {
+  const t0 = performance.now();
+  const opt = { method };
+  if (body) { opt.headers = { 'Content-Type': 'application/x-www-form-urlencoded' }; opt.body = new URLSearchParams(body); }
+  let res, text = '', blob = null;
+  try {
+    res = await fetch(url, opt);
+    const ct = res.headers.get('content-type') || '';
+    if (ct.startsWith('image/')) { blob = await res.blob(); text = `[${ct}, ${blob.size} bytes, gen ${res.headers.get('x-generate-ms')}ms]`; }
+    else text = await res.text();
+  } catch (e) { text = String(e); }
+  const ms = Math.round(performance.now() - t0);
+  const status = res ? res.status : 0;
+  if (log) addLog(method, url, status, ms, text, body);
+  return { status, text, blob, json: safeJson(text) };
+}
+function safeJson(t) { try { return JSON.parse(t); } catch { return null; } }
+
+function addLog(method, url, status, ms, text, body) {
+  const tr = document.createElement('tr'); tr.className = 'req';
+  const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+  const cls = status >= 500 || status === 0 ? 's5' : status >= 400 ? 's4' : 's2';
+  const short = text.length > 60 ? text.slice(0, 60) + '…' : text;
+  tr.innerHTML = `<td>${time}</td><td>${method}</td><td>${esc(url)}</td><td class="${cls}">${status}</td><td>${ms}</td><td>${esc(short)}</td>`;
+  const detail = document.createElement('tr'); detail.hidden = true;
+  detail.innerHTML = `<td colspan="6"><pre>${body ? 'request body: ' + esc(new URLSearchParams(body).toString()) + '\n' : ''}response: ${esc(text)}</pre></td>`;
+  tr.onclick = () => detail.hidden = !detail.hidden;
+  $('log').prepend(detail); $('log').prepend(tr);
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+
+// ---- captcha ----------------------------------------------------------------
+async function loadImage(id, imgEl) {
+  const r = await call('GET', '/' + id);
+  if (r.blob) { if (imgEl.src.startsWith('blob:')) URL.revokeObjectURL(imgEl.src); imgEl.src = URL.createObjectURL(r.blob); }
+  return r;
+}
+async function newCaptcha() {
+  const r = await call('GET', API.newId);
+  if (!r.json) return;
+  setCurrent(r.json.id);
+  await loadImage(currentId, $('img'));
+}
+function setCurrent(id) {
+  currentId = id; $('idText').textContent = 'id: ' + id; $('answer').value = ''; $('answer').focus();
+}
+function showResult(r) {
+  const el = $('result');
+  if (r.status === 429) { el.className = 'result warn'; el.textContent = '429 — bị rate limit'; return; }
+  const reason = r.json?.reason || r.text;
+  const map = { correct: '✅ đúng', wrong: '❌ sai', unknown_id: '⚠ unknown_id — id không tồn tại / đã dùng', missing_fields: '⚠ thiếu id hoặc đáp án' };
+  el.className = 'result ' + (reason === 'correct' ? 'ok' : reason === 'wrong' ? 'bad' : 'warn');
+  el.textContent = map[reason] || reason;
+}
+async function verify(id, answer) {
+  const r = await call('POST', API.verify, { id, answer });
+  showResult(r); lastVerifiedId = id; refreshStats();
+  return r;
+}
+
+$('btnNew').onclick = newCaptcha;
+$('btnReload').onclick = () => currentId && loadImage(currentId, $('img'));
+$('btnVerify').onclick = async () => { if (!currentId) return; await verify(currentId, $('answer').value); };
+$('answer').onkeydown = (e) => { if (e.key === 'Enter') $('btnVerify').click(); };
+$('btnReuse').onclick = () => lastVerifiedId && verify(lastVerifiedId, 'xxxxxx');
+$('btnBogus').onclick = () => verify(crypto.randomUUID(), 'xxxxxx');
+
+$('btnPeek').onclick = async () => {
+  const r = await call('GET', '/api/debug/answer/' + currentId);
+  if (r.json?.answer) $('answer').value = r.json.answer;
+};
+$('btnAuto').onclick = async () => {
+  const r = await call('GET', '/api/debug/answer/' + currentId);
+  if (r.json?.answer) await verify(currentId, r.json.answer);
+};
+
+// ---- gallery ----------------------------------------------------------------
+$('btnGallery').onclick = async () => {
+  const g = $('gallery'); g.innerHTML = '';
+  for (let i = 0; i < 12; i++) {
+    const r = await call('GET', API.newId);
+    const img = document.createElement('img'); img.title = r.json.id; g.appendChild(img);
+    await loadImage(r.json.id, img);
+    img.onclick = () => { setCurrent(r.json.id); $('img').src = img.src; };
+  }
+  refreshStats();
+};
+
+// ---- burst / rate limit -----------------------------------------------------
+$('btnBurst').onclick = async () => {
+  const n = Math.min(500, +$('burstN').value || 1);
+  const counts = {};
+  const jobs = Array.from({ length: n }, () =>
+    call('POST', API.verify, { id: crypto.randomUUID(), answer: 'xxxxxx' }, { log: false })
+      .then(r => counts[r.status] = (counts[r.status] || 0) + 1));
+  await Promise.all(jobs);
+  addLog('POST', API.verify + ` ×${n}`, 0, 0, JSON.stringify(counts));
+  $('burstResult').textContent = Object.entries(counts).map(([s, c]) => `${s}: ${c}`).join(' · ');
+  refreshStats();
+};
+
+$('btnClear').onclick = () => $('log').innerHTML = '';
+
+// ---- stats ------------------------------------------------------------------
+async function refreshStats() {
+  const r = await call('GET', '/api/stats', null, { log: false });
+  const s = r.json; if (!s) return;
+  debug = s.debug;
+  $('debugRow').hidden = !debug;
+  $('debugHint').textContent = debug ? 'DEBUG=1: có endpoint xem đáp án. Tắt khi chạy thật.' : '';
+  const items = [['storeSize','đang lưu'],['generated','đã sinh'],['correct','đúng'],['wrong','sai'],['garbageCollected','đã dọn'],['rateLimitPerMinute','limit/phút']];
+  $('stats').innerHTML = items.map(([k, label]) => `<div class="stat"><b>${s[k]}</b><small>${label}</small></div>`).join('');
+}
+
+newCaptcha().then(refreshStats);
+setInterval(refreshStats, 5000);
+</script>
+</body>
+</html>
