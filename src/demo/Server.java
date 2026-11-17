@@ -39,12 +39,14 @@ import javax.imageio.ImageIO;
  *   GET  /api/debug/answer/<uuid>              đáp án (CHỈ khi DEBUG=1)
  *   GET  /health                               -> ok
  *
- * Biến môi trường: PORT (8080), DEBUG (0/1), RATE_LIMIT (số request / phút / IP cho ảnh + verify, mặc định 60)
+ * Biến môi trường: PORT (8080), DEBUG (0/1), RATE_LIMIT (số request / phút / IP cho ảnh + verify, mặc định 60),
+ *                  TRUST_PROXY (0/1: chỉ bật khi chạy sau reverse proxy — Codespaces, Render, nginx...)
  */
 public class Server {
     private static final int PORT = Integer.parseInt(env("PORT", "8080"));
     private static final boolean DEBUG = env("DEBUG", "0").equals("1");
     private static final int RATE_LIMIT = Integer.parseInt(env("RATE_LIMIT", "60"));
+    private static final boolean TRUST_PROXY = env("TRUST_PROXY", "0").equals("1");
 
     private static final String UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
     private static final Pattern IMAGE_PATH = Pattern.compile("/(" + UUID_RE + ")");
@@ -69,7 +71,7 @@ public class Server {
         s.createContext("/", Server::handle);
         s.setExecutor(Executors.newFixedThreadPool(16));
         s.start();
-        System.out.printf("JCaptcha Lab: http://localhost:%d  (DEBUG=%s, RATE_LIMIT=%d req/min/IP)%n", PORT, DEBUG, RATE_LIMIT);
+        System.out.printf("JCaptcha Lab: http://localhost:%d  (DEBUG=%s, RATE_LIMIT=%d req/min/IP, TRUST_PROXY=%s)%n", PORT, DEBUG, RATE_LIMIT, TRUST_PROXY);
     }
 
     // ---------------------------------------------------------------- routing
@@ -218,9 +220,17 @@ public class Server {
         return m;
     }
 
+    /**
+     * IP dùng cho rate limit.
+     * Chỉ tin X-Forwarded-For khi TRUST_PROXY=1 (app nằm sau proxy, client không gửi thẳng tới app được).
+     * Nếu không, ai cũng tự gửi header này với IP bịa mỗi lần -> né được rate limit.
+     */
     private static String ip(HttpExchange ex) {
-        String fwd = ex.getRequestHeaders().getFirst("X-Forwarded-For");
-        return fwd != null ? fwd.split(",")[0].trim() : ex.getRemoteAddress().getAddress().getHostAddress();
+        if (TRUST_PROXY) {
+            String fwd = ex.getRequestHeaders().getFirst("X-Forwarded-For");
+            if (fwd != null && !fwd.isBlank()) return fwd.split(",")[0].trim();
+        }
+        return ex.getRemoteAddress().getAddress().getHostAddress();
     }
 
     private static int send(HttpExchange ex, int code, String type, String body) throws IOException {

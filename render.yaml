@@ -1,0 +1,14 @@
+# Deploy lên Render (free): dashboard.render.com -> New -> Blueprint -> chọn repo này
+services:
+  - type: web
+    name: jcaptcha-lab
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DEBUG
+        value: "1"        # bật endpoint xem đáp án để test; đổi "0" nếu để public lâu dài
+      - key: TRUST_PROXY
+        value: "1"        # Render đứng trước app như reverse proxy
+      - key: RATE_LIMIT
+        value: "60"
