@@ -21,6 +21,6 @@ public class WavyBandDecorator implements GlyphsDecorator {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         int w = background.getWidth(), h = background.getHeight();
         for (int i = 0; i < lines; i++)
-            WavyLines.draw(g2, w, h * 0.30, h * 0.62, 4, 150, 178, 1.5f, 2.3f);
+            WavyLines.draw(g2, w, h * 0.30, h * 0.62, 4, 165, 190, 1.2f, 1.8f);
     }
 }

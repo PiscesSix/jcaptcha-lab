@@ -69,6 +69,7 @@
         <button class="debug" id="btnAuto">Tự giải đúng (debug)</button>
       </div>
       <div class="result" id="result"></div>
+      <div class="hint">Mỗi captcha chỉ kiểm tra được 1 lần — kiểm tra xong trang tự lấy ảnh mới. Không phân biệt hoa thường.</div>
       <div class="hint" id="debugHint"></div>
     </section>
 
@@ -166,6 +167,7 @@ function showResult(r) {
   const map = { correct: '✅ đúng', wrong: '❌ sai', unknown_id: '⚠ unknown_id — id không tồn tại / đã dùng', missing_fields: '⚠ thiếu id hoặc đáp án' };
   el.className = 'result ' + (reason === 'correct' ? 'ok' : reason === 'wrong' ? 'bad' : 'warn');
   el.textContent = map[reason] || reason;
+  if (r.json?.expected) el.textContent += ` — bạn gõ "${r.json.got}", đáp án "${r.json.expected}"`;
 }
 async function verify(id, answer) {
   const r = await call('POST', API.verify, { id, answer });
@@ -175,7 +177,18 @@ async function verify(id, answer) {
 
 $('btnNew').onclick = newCaptcha;
 $('btnReload').onclick = () => currentId && loadImage(currentId, $('img'));
-$('btnVerify').onclick = async () => { if (!currentId) return; await verify(currentId, $('answer').value); };
+$('btnVerify').onclick = async () => {
+  if (!currentId) return;
+  await verify(currentId, $('answer').value);
+  await reloadAfterVerify();
+};
+// JCaptcha xóa captcha ngay sau khi verify (đúng hay sai) -> ảnh đang hiện không còn dùng được, load ảnh mới.
+async function reloadAfterVerify() {
+  const r = await call('GET', API.newId);
+  if (!r.json) return;
+  currentId = r.json.id; $('idText').textContent = 'id: ' + currentId; $('answer').value = ''; $('answer').focus();
+  await loadImage(currentId, $('img'));
+}
 $('answer').onkeydown = (e) => { if (e.key === 'Enter') $('btnVerify').click(); };
 $('btnReuse').onclick = () => lastVerifiedId && verify(lastVerifiedId, 'xxxxxx');
 $('btnBogus').onclick = () => verify(crypto.randomUUID(), 'xxxxxx');
@@ -186,7 +199,7 @@ $('btnPeek').onclick = async () => {
 };
 $('btnAuto').onclick = async () => {
   const r = await call('GET', '/api/debug/answer/' + currentId);
-  if (r.json?.answer) await verify(currentId, r.json.answer);
+  if (r.json?.answer) { await verify(currentId, r.json.answer); await reloadAfterVerify(); }
 };
 
 // ---- gallery ----------------------------------------------------------------

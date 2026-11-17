@@ -147,15 +147,18 @@ public class Server {
         String answer = f.getOrDefault("answer", "").trim();
         if (id.isEmpty() || answer.isEmpty())
             return send(ex, 400, "application/json", "{\"ok\":false,\"reason\":\"missing_fields\"}");
-        DEBUG_ANSWERS.remove(id);
+        String expected = DEBUG_ANSWERS.remove(id);
         String reason;
         try {
             reason = CAPTCHA.validateResponseForID(id, answer) ? "correct" : "wrong";
         } catch (CaptchaServiceException e) {
             reason = "unknown_id";   // id chưa từng gọi ảnh / đã verify / đã bị dọn
         }
+        String extra = DEBUG && expected != null && reason.equals("wrong")
+                ? ",\"expected\":\"" + expected + "\",\"got\":\"" + answer.replace("\"", "") + "\""
+                : "";   // DEBUG: trả đáp án đúng khi sai, để so với cái đã gõ
         return send(ex, 200, "application/json",
-                "{\"ok\":" + reason.equals("correct") + ",\"reason\":\"" + reason + "\"}");
+                "{\"ok\":" + reason.equals("correct") + ",\"reason\":\"" + reason + "\"" + extra + "}");
     }
 
     private static int stats(HttpExchange ex) throws IOException {

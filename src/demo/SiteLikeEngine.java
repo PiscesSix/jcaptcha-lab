@@ -36,13 +36,16 @@ public class SiteLikeEngine extends ListImageCaptchaEngine {
 
     @Override
     protected void buildInitialFactories() {
-        // 1. Sinh đáp án: 6 ký tự ngẫu nhiên, bỏ ký tự dễ nhầm
+        // 1. Sinh đáp án: 6 ký tự ngẫu nhiên.
+        //    Bỏ các ký tự dễ nhầm khi bị xoay/đè nhiễu: 0 O o, 1 l I i j, 2 z Z, 5 S(chỉ giữ s), 6 b?, 8 B?,
+        //    9 g q, u v (lẫn nhau và lẫn y), r (rn trông như m).
+        //    Check không phân biệt hoa thường nên giữ cặp hoa/thường cùng một chữ (c/C, k/K...).
         //    (bọc trong RecordingWordGenerator để chế độ DEBUG đọc được đáp án khi test)
         WordGenerator words = new RecordingWordGenerator(new RandomWordGenerator(
-                "abcdefghkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"));
+                "abcdefhkmnpstwxyACDEFGHJKLMNPQRTWXY347"));
 
-        // 2. Font: cỡ 28..36, sans in đậm
-        FontGenerator fonts = new RandomFontGenerator(28, 36, new Font[] {
+        // 2. Font: cỡ 26..32, sans in đậm
+        FontGenerator fonts = new RandomFontGenerator(26, 32, new Font[] {
                 new Font("Arial", Font.BOLD, 34),
                 new Font("SansSerif", Font.BOLD, 34),
                 new Font("DejaVu Sans", Font.BOLD, 34) }, false);
@@ -55,12 +58,12 @@ public class SiteLikeEngine extends ListImageCaptchaEngine {
         // 4. Dán chữ: visitor = biến đổi vị trí/góc từng ký tự, decorator = vẽ đè sau khi dán
         TextPaster paster = new GlyphsPaster(6, 6, textColors, Boolean.TRUE,
                 new GlyphsVisitors[] {
-                        new TranslateGlyphsVerticalRandomVisitor(4),     // lệch lên/xuống ±4px
-                        new RotateGlyphsRandomVisitor(Math.PI / 18),    // xoay ±10°
-                        new HorizontalSpaceGlyphsVisitor(5),            // cách nhau 5px
-                        new TranslateAllToRandomPointVisitor(8, 6) },   // đặt cả chữ vào vị trí ngẫu nhiên
+                        new TranslateGlyphsVerticalRandomVisitor(3),     // lệch lên/xuống ±3px
+                        new RotateGlyphsRandomVisitor(Math.PI / 24),    // xoay ±7.5° (xoay nhiều thì z, N, u... dễ thành chữ khác)
+                        new HorizontalSpaceGlyphsVisitor(4),            // cách nhau 4px
+                        new TranslateAllToRandomPointVisitor(12, 12) }, // đặt cả chữ vào vị trí ngẫu nhiên, chừa lề 12px để không bị cắt mép
                 new GlyphsDecorator[] {
-                        new WavyBandDecorator(6) });                   // tự viết: chùm đường đè lên chữ
+                        new WavyBandDecorator(4) });                   // tự viết: chùm đường đè lên chữ (4 đường nhạt, đủ rối mà người vẫn đọc được)
 
         // 5. Nền tự viết 200x60: xước + 2 đường sin cố định + đường lượn (nằm dưới chữ)
         BackgroundGenerator background = new ScratchWavyBackground(200, 60);
