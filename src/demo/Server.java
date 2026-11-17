@@ -94,6 +94,7 @@ public class Server {
     private static int route(HttpExchange ex) throws IOException {
         String path = ex.getRequestURI().getPath();
         String m = ex.getRequestMethod();
+        if (m.equals("HEAD")) m = "GET";   // HEAD xử lý như GET, send() bỏ phần body (Render/uptime checker hay gửi HEAD)
         Matcher img = IMAGE_PATH.matcher(path);
         Matcher dbg = DEBUG_PATH.matcher(path);
 
@@ -239,6 +240,10 @@ public class Server {
 
     private static int send(HttpExchange ex, int code, String type, byte[] body) throws IOException {
         ex.getResponseHeaders().set("Content-Type", type);
+        if (ex.getRequestMethod().equals("HEAD")) {   // HEAD: chỉ header, không body
+            ex.sendResponseHeaders(code, -1);
+            return code;
+        }
         ex.sendResponseHeaders(code, body.length);
         try (OutputStream os = ex.getResponseBody()) { os.write(body); }
         return code;
