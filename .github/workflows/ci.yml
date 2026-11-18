@@ -14,6 +14,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Deps cho test (OCR level 9 + toán level 10)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
+          python3 -m pip install --quiet numpy scipy pillow
       - name: Build
         run: ./build.sh
       - name: Start server (DEBUG=1)

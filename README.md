@@ -94,7 +94,7 @@ Cả hai bỏ ký tự dễ nhầm (`0 o O 1 l i I j 2 z 5 s 6 b 8 B 9 g q u v r
 
 ## CTF bug bounty (`/ctf`)
 
-9 level. Level 1–8 là các phiên bản **cố tình có lỗi** của bước kiểm tra captcha; level 9 có logic đúng nhưng tấm ảnh yếu (OCR phổ thông đọc được). Khai thác đúng lỗi thì response trả về `FLAG{…}`. Flag được sinh ngẫu nhiên mỗi lần khởi động server.
+10 level. Level 1–8 là các phiên bản **cố tình có lỗi** của bước kiểm tra captcha; level 9–10 có logic đúng nhưng tấm ảnh yếu. Khai thác đúng lỗi thì response trả về `FLAG{…}`. Flag được sinh ngẫu nhiên mỗi lần khởi động server.
 
 | Level | Chủ đề |
 |---|---|
@@ -107,6 +107,7 @@ Cả hai bỏ ký tự dễ nhầm (`0 o O 1 l i I j 2 z 5 s 6 b 8 B 9 g q u v r
 | 7 | Race condition |
 | 8 | Kiểm tra bằng cookie |
 | 9 | Captcha chữ "sạch": tesseract đọc đúng 39/40 ảnh (ảnh nhiễu: 0/40) |
+| 10 | Lỗi thiết kế ảnh: giải bằng TOÁN THUẦN (màu + thành phần liên thông + khớp mẫu NCC), không OCR/ML — bộ giải mẫu đọc đúng 40/40 |
 
 Trang `/ctf` có gợi ý từng level, mẫu viết báo cáo bug bounty và tóm tắt các nghiên cứu phá captcha từ 2011 đến 2026 (Bursztein, Goodfellow, George, Ye, Searles, Plesner, Halligan, Open CaptchaWorld, COGNITION, Broken Gates). Lời giải: `docs/CTF_WRITEUP.md` và `tests/ctf_test.sh` (**spoiler**). Chạy test: `CTF_TEST=1 DEBUG=1 java -cp out demo.Server` rồi `./tests/ctf_test.sh`.
 
@@ -126,5 +127,6 @@ Các kỹ thuật trong CTF chỉ dùng trên lab của mình hoặc hệ thốn
 | `tests/api_test.sh` | 27 test luồng session bằng curl |
 | `src/demo/Ctf.java` | 9 level CTF |
 | `web/ctf.html` | trang CTF: level, gợi ý, nộp flag, mẫu báo cáo, tóm tắt nghiên cứu |
-| `tests/ctf_test.sh` | lời giải tự động 9 level (spoiler) |
+| `tests/ctf_test.sh` | lời giải tự động 10 level (spoiler) |
+| `tests/solve_level10.py` | bộ giải toán thuần cho level 10: saturation → scipy.ndimage.label → NCC (spoiler) |
 | `docs/CTF_WRITEUP.md` | writeup: lỗi, nguyên nhân, khai thác, tác động, cách sửa (spoiler) |

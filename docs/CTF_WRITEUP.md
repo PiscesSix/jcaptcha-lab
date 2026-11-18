@@ -1,4 +1,4 @@
-# ⚠️ SPOILER — Writeup 9 level CTF captcha
+# ⚠️ SPOILER — Writeup 10 level CTF captcha
 
 Tự chơi ở `/ctf` trước khi đọc. Mỗi level gồm: lỗi, nguyên nhân gốc trong code (`src/demo/Ctf.java`), cách khai thác, tác động và cách sửa. Bản kiểm tra đúng để đối chiếu là `Server.checkCaptcha()`:
 
@@ -117,6 +117,32 @@ Lặp 10 lần trong 20 giây. Đo trong lab: tesseract đọc đúng **39/40** 
 
 **Sửa:** không có bản "sửa ảnh" nào bền lâu (xem mục nghiên cứu trên trang `/ctf`). Hướng đúng là **nhiều lớp**: giữ logic server đúng như level 1–8; rate limit theo IP *và* theo tài khoản; dùng tín hiệu hành vi và danh tiếng trình duyệt (Turnstile, reCAPTCHA v3); giới hạn số lượt mỗi người cho tài nguyên khan hiếm như lịch hẹn; xác minh danh tính (OTP, tài khoản định danh) cho thao tác giá trị cao.
 
+## Level 10 — Lỗi thiết kế ảnh, giải bằng TOÁN THUẦN
+
+**Lỗi:** logic đúng, ảnh có nhiễu nên OCR phổ thông trượt. Nhưng tấm ảnh phạm đúng ba "lỗi thiết kế chết người" mà Yan & El Ahmad (ACSAC 2007) mô tả:
+1. **Nhiễu phân biệt được với chữ bằng thống kê:** nhiễu là nét xám (bão hòa ~0), chữ có màu (bão hòa cao).
+2. **Ký tự không dính nhau:** mỗi ký tự là một vùng pixel tách rời.
+3. **Font cố định:** nhận dạng được bằng khớp mẫu, không cần học.
+
+**Khai thác — pipeline toán cổ điển, không OCR, không học máy** (`tests/solve_level10.py`, chỉ dùng numpy + scipy.ndimage + PIL):
+
+| Bước | Toán | Làm gì |
+|---|---|---|
+| 1. Tách chữ/nhiễu | `S = (max−min)/max` trong HSV | Giữ pixel bão hòa > 0.35 → rụng sạch nhiễu xám + nền + chấm |
+| 2. Tách ký tự | Gán nhãn thành phần liên thông 8-hướng (`scipy.ndimage.label`) | Mỗi vùng pixel nối nhau = 1 ký tự; bỏ vùng < 60 px (chấm sót); xếp trái→phải theo tâm x |
+| 3. Chuẩn hóa | Cắt sát + resize giữ tỉ lệ về ô 40×40 | Đưa mọi ký tự về cùng khung để so |
+| 4. Nhận dạng | NCC `Σ(a−ā)(b−b̄) / √(Σ(a−ā)²·Σ(b−b̄)²)` | Khớp với glyph tự render (DejaVu Sans Bold) ở 3 góc xoay −6°,0°,+6° để chịu xoay nhẹ; chọn điểm cao nhất |
+
+**Kết quả đo trong lab:** bộ giải đọc đúng **40/40** ảnh level 10; chạy end-to-end (tự lấy ảnh → đặt lịch) lấy flag sau 5 lần, khoảng **0.2 giây**. Cùng pipeline này **không** giải được ảnh của level 1–9 (nhiễu cùng màu/độ dày với chữ, ký tự dính nhau).
+
+**Tại sao toán ăn được mà vẫn "không còn thử thách như OCR":** OCR phổ thông (tesseract) đọc trượt ảnh này vì nó không tự tách nhiễu và tách ký tự. Phần việc đó mình làm bằng toán (lọc theo saturation + thành phần liên thông). Đây đúng là luận điểm của các nghiên cứu "toán thuần":
+- **Mori & Malik, CVPR 2003** — shape context + so khớp χ²: đọc đúng từ EZ-Gimpy (Yahoo) 92%.
+- **Chellapilla & Simard, NIPS 2004** — chứng minh *segmentation* (tách ký tự) mới là phần khó; nhận dạng từng ký tự thì máy làm tốt bằng hoặc hơn người.
+- **Yan & El Ahmad, ACSAC 2007** — chỉ dùng nhận dạng mẫu đơn giản (đếm pixel, so khớp) + khai thác lỗi thiết kế, phá 99–100% nhiều loại captcha mà OCR chất lượng cao chịu thua.
+- **Gao, Yan và cộng sự, NDSS 2016** — bộ lọc Log-Gabor tách nét theo hướng/tần số, phá hàng loạt captcha của Google/Microsoft/Yahoo/Amazon.
+
+**Sửa:** làm cho nhiễu và chữ **không phân biệt được bằng bất kỳ đại lượng thống kê nào** — cùng màu, cùng độ dày nét, nhiễu cũng là những đoạn cong giống nét chữ; và để các ký tự **dính/đè nhau** để không tách rời bằng thành phần liên thông. Đổi lại người dùng cũng khó đọc hơn. Nhưng kể cả làm đúng hết, model học riêng (CNN+CTC, GAN của Ye 2018) vẫn đọc được — nên kết luận cuối vẫn là: ảnh không phải hàng rào chính, phải dựa thêm rate limit + tín hiệu hành vi + định danh (xem mục nghiên cứu).
+
 ---
 
 ## Bài học chung
@@ -130,4 +156,5 @@ Lặp 10 lần trong 20 giây. Đo trong lab: tesseract đọc đúng **39/40** 
 | Lấy và xóa nguyên tử | 7 |
 | Giới hạn số lần thử, đáp án đủ dài | 5 |
 | Không tin dữ liệu client gửi lên | 8 |
-| Ảnh captcha không phải hàng rào chính: cần thêm rate limit, tín hiệu hành vi, định danh | 9 |
+| Ảnh captcha không phải hàng rào chính: cần thêm rate limit, tín hiệu hành vi, định danh | 9, 10 |
+| Nhiễu phải không phân biệt được với chữ (màu/độ dày/hướng); ký tự nên dính nhau | 10 |

@@ -73,7 +73,11 @@ final class Ctf {
         new Level(9, "Captcha chữ \"sạch\" (Bursztein 2011, Goodfellow 2014)",
             "Người dùng kêu ảnh nhiễu khó đọc, dev đổi sang chữ rõ ràng trên nền trắng. Logic kiểm tra lần này ĐÚNG hoàn toàn: gắn session, dùng 1 lần, không lộ đáp án.",
             "Đặt lịch thành công 10 lần trong vòng 20 giây (người gõ tay không kịp).",
-            "Không có lỗi logic nào cả. Thứ yếu là chính cái ảnh: một công cụ OCR có sẵn (tesseract) đọc được nó không?")
+            "Không có lỗi logic nào cả. Thứ yếu là chính cái ảnh: một công cụ OCR có sẵn (tesseract) đọc được nó không?"),
+        new Level(10, "Lỗi thiết kế ảnh (toán thuần, không OCR/ML)",
+            "Logic đúng. Ảnh có nhiễu che chữ nên OCR phổ thông đọc trượt. NHƯNG: mỗi ký tự một màu bão hòa riêng, các ký tự KHÔNG dính nhau, nhiễu là nét xám mảnh. Giải bằng xử lý ảnh cổ điển, không cần học máy.",
+            "Đặt lịch thành công 5 lần trong vòng 30 giây bằng bộ giải tự viết.",
+            "Nhiễu xám (bão hòa thấp), chữ có màu (bão hòa cao): lọc theo saturation là rụng nhiễu. Chữ rời nhau: gán nhãn thành phần liên thông, mỗi vùng một ký tự. Nhận dạng: khớp mẫu NCC với glyph tự render (DejaVu Sans Bold).")
     );
 
     private static final SecureRandom R = new SecureRandom();
@@ -121,6 +125,13 @@ final class Ctf {
                     "{\"code\":\"IMAGE_SERVICE_MAINTENANCE\",\"message\":\"Dịch vụ ảnh đang bảo trì\"}");
         }
 
+        if (n == 10) {                                       // lỗi thiết kế: tách được bằng toán
+            String answer = mathText();
+            s.set(k(n, "answer"), answer);
+            if (TEST) ex.getResponseHeaders().set("X-Test-Answer", answer);
+            return Server.png(ex, mathImage(answer));
+        }
+
         if (n == 9) {                                        // chữ sạch: logic đúng, ảnh yếu
             String answer = cleanText();
             s.set(k(n, "answer"), answer);
@@ -154,7 +165,7 @@ final class Ctf {
         boolean ok;
 
         switch (n) {
-            case 1, 9 -> ok = checkCorrectly(s, n, resp);    // kiểm tra đúng; lv1 lỗi ở chỗ lộ đáp án, lv9 lỗi ở ảnh
+            case 1, 9, 10 -> ok = checkCorrectly(s, n, resp); // kiểm tra đúng; lv1 lộ đáp án, lv9/lv10 lỗi ở ảnh
 
             case 2 -> {                                      // LỖI: so xong không xóa đáp án
                 String expected = s == null ? null : (String) s.get(k(n, "answer"));
@@ -229,6 +240,12 @@ final class Ctf {
                 solved = recent >= 10;
                 progress = recent + "/10 lần trong 20 giây";
             }
+            case 10 -> {
+                long recent;
+                synchronized (wins) { recent = wins.stream().filter(t -> now - t <= 30_000).count(); }
+                solved = recent >= 5;
+                progress = recent + "/5 lần trong 30 giây";
+            }
             case 2 -> { int c = size(wins); solved = c >= 5 && imgs == 1; progress = c + "/5 lần, đã lấy " + imgs + " ảnh (cần đúng 1)"; }
             case 7 -> { int c = size(wins); solved = c >= 3 && imgs == 1; progress = c + "/3 lần, đã lấy " + imgs + " ảnh (cần đúng 1)"; }
             case 3, 4, 6, 8 -> { solved = imgs == 0; progress = "session này đã lấy " + imgs + " ảnh (cần 0)"; }
@@ -276,6 +293,80 @@ final class Ctf {
         if (s != null) for (String key : List.of("answer", "images", "wins")) s.remove(k(n, key));
         if (n == 6) sharedAnswer = null;
         return Server.send(ex, 200, "application/json", "{\"reset\":" + n + "}");
+    }
+
+    // ================================================================== level 10: ảnh "toán giải được"
+
+    // Bảng chữ hình dạng phân biệt rõ (bỏ ký tự dễ nhầm và dễ lẫn khi xoay nhẹ).
+    private static final char[] MATH_CHARS = "ABCDEFGHKMNPRTWXY347".toCharArray();
+    // Màu bão hòa cao nhưng tối (đọc được trên nền sáng); mỗi ký tự lấy một màu khác nhau.
+    private static final java.awt.Color[] MATH_COLORS = {
+        new java.awt.Color(0xC0, 0x1A, 0x1A), new java.awt.Color(0x18, 0x6A, 0x24),
+        new java.awt.Color(0x1C, 0x36, 0xC0), new java.awt.Color(0x7A, 0x1C, 0x9E),
+        new java.awt.Color(0x0E, 0x7A, 0x82), new java.awt.Color(0xB5, 0x5A, 0x0E),
+        new java.awt.Color(0xA8, 0x14, 0x5C) };
+
+    private static String mathText() {
+        char[] c = new char[5];
+        for (int i = 0; i < c.length; i++) c[i] = MATH_CHARS[R.nextInt(MATH_CHARS.length)];
+        return new String(c);
+    }
+
+    /**
+     * Ảnh có lỗi thiết kế (cố ý) để giải bằng toán cổ điển:
+     *  - nền sáng + chấm nhiễu xám (bão hòa thấp)
+     *  - nhiễu = nét xám MẢNH 1px
+     *  - chữ = màu bão hòa CAO, nét dày, mỗi ký tự một màu, KHÔNG dính nhau
+     * Lọc theo saturation -> rụng nhiễu; chữ rời nhau -> thành phần liên thông tách được.
+     */
+    private static java.awt.image.BufferedImage mathImage(String text) {
+        int w = 240, h = 70;
+        var img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var g = img.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        // nền sáng hơi ngả xám
+        g.setColor(new java.awt.Color(0xEE, 0xEE, 0xEC));
+        g.fillRect(0, 0, w, h);
+        // chấm nhiễu xám (bão hòa ~0)
+        for (int i = 0; i < 260; i++) {
+            int v = 150 + R.nextInt(80);
+            img.setRGB(R.nextInt(w), R.nextInt(h), (v << 16) | (v << 8) | v);
+        }
+        // nhiễu: nét xám MẢNH 1px, lượn khắp ảnh (đè lên chữ nhưng mảnh hơn nét chữ)
+        g.setStroke(new java.awt.BasicStroke(1.0f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+        for (int i = 0; i < 7; i++) {
+            int gray = 120 + R.nextInt(60);
+            g.setColor(new java.awt.Color(gray, gray, gray));
+            var p = new java.awt.geom.Path2D.Double();
+            double x0 = -10 + R.nextDouble() * 40, y0 = R.nextDouble() * h;
+            double a1 = R.nextDouble() * 14, f1 = 0.02 + R.nextDouble() * 0.05, ph = R.nextDouble() * 6.28;
+            p.moveTo(x0, y0);
+            for (double x = x0; x <= w + 10; x += 3)
+                p.lineTo(x, y0 + a1 * Math.sin(f1 * x + ph) + (R.nextDouble() - 0.5) * 3);
+            g.draw(p);
+        }
+        // chữ: mỗi ký tự một màu bão hòa, nét dày (bold size 40), cách nhau đủ xa để không chạm
+        int n = text.length();
+        double step = (w - 36.0) / n;
+        java.util.List<Integer> colorIdx = new java.util.ArrayList<>();
+        for (int i = 0; i < MATH_COLORS.length; i++) colorIdx.add(i);
+        java.util.Collections.shuffle(colorIdx, new java.util.Random(R.nextLong()));
+        for (int i = 0; i < n; i++) {
+            int size = 38 + R.nextInt(6);
+            g.setFont(new java.awt.Font("DejaVu Sans", java.awt.Font.BOLD, size));
+            g.setColor(MATH_COLORS[colorIdx.get(i % colorIdx.size())]);
+            double cx = 18 + step * (i + 0.5) + (R.nextDouble() - 0.5) * 6;
+            double cy = h * 0.68 + (R.nextDouble() - 0.5) * 8;
+            var fm = g.getFontMetrics();
+            float gx = (float) (cx - fm.charWidth(text.charAt(i)) / 2.0);
+            var old = g.getTransform();
+            g.rotate(Math.toRadians(-6 + R.nextDouble() * 12), cx, cy);   // xoay nhẹ ±6°
+            g.drawString(String.valueOf(text.charAt(i)), gx, (float) cy);
+            g.setTransform(old);
+        }
+        g.dispose();
+        return img;
     }
 
     // ================================================================== level 9: ảnh chữ sạch

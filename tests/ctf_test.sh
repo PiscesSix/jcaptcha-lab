@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ⚠️ SPOILER: lời giải tự động cho cả 9 level CTF.
+# ⚠️ SPOILER: lời giải tự động cho cả 10 level CTF.
 # Server phải chạy với CTF_TEST=1 (ảnh kèm header X-Test-Answer để script "đọc" ảnh thay người).
 # Dùng: ./tests/ctf_test.sh [base_url]
 set -uo pipefail
@@ -67,6 +67,15 @@ echo "== Level 9: ảnh chữ sạch -> đọc tự động (test dùng X-Test-A
 J=$T/j9
 for i in $(seq 1 10); do act 9 $J "$(cap 9 $J)" $T/o9; done
 F=$(flag $T/o9); [ -n "$F" ] && ok 9 "$F" || bad 9 "$(cat $T/o9)"
+
+echo "== Level 10: bộ giải TOÁN THUẦN (numpy+scipy+PIL, không OCR/ML)"
+if python3 -c "import numpy, scipy, PIL" 2>/dev/null; then
+  OUT=$(python3 "$(dirname "$0")/solve_level10.py" --serve "$B" 2>&1)
+  echo "$OUT" | sed 's/^/    /'
+  echo "$OUT" | grep -q 'FLAG{' && ok 10 "$(echo "$OUT" | grep -o 'FLAG{[^}]*}' | head -1)" || bad 10 "bộ giải toán không lấy được flag"
+else
+  echo "  (bỏ qua: thiếu numpy/scipy/PIL — cài bằng: pip install numpy scipy pillow)"
+fi
 
 echo "== Kiểm chứng: cách chơi \"bình thường\" KHÔNG ra flag"
 J=$T/jn; A=$(cap 3 $J); act 3 $J "$A" $T/on

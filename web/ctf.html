@@ -44,7 +44,7 @@
 <header>
   <h1>Captcha Bug Bounty</h1>
   <a href="/">← Lab luồng chuẩn</a>
-  <span class="score" id="score">0/9</span>
+  <span class="score" id="score">0/10</span>
 </header>
 
 <div class="wrap">
@@ -66,11 +66,15 @@
 
   <div class="research">
     <h2 style="font-size:15px;margin:0 0 4px">Nghiên cứu: captcha đã bị phá như thế nào (2011 → 2026)</h2>
-    <div class="tag">Level 1–8 là lỗi logic phía server. Level 9 là lỗi của chính tấm ảnh — loại lỗi mà các nghiên cứu dưới đây đo đạc.</div>
+    <div class="tag">Level 1–8 là lỗi logic phía server. Level 9–10 là lỗi của chính tấm ảnh. Các mốc <b>2003, 2004, 2007, 2016</b> dưới đây phá captcha bằng TOÁN/xử lý ảnh (không học sâu) — đúng tinh thần level 10.</div>
     <ol>
+      <li><b class="y">2003</b><div><a href="https://www.cs.sfu.ca/~mori/research/gimpy/" target="_blank">Mori & Malik — Recognizing Objects in Adversarial Clutter</a> (CVPR). <b>Toán thuần, không học máy:</b> shape context + so khớp χ², đọc đúng từ trong EZ-Gimpy (Yahoo) 92%.</div></li>
+      <li><b class="y">2004</b><div><a href="https://proceedings.neurips.cc/paper/2004/hash/283085d30e10513624c8cece7993f4de-Abstract.html" target="_blank">Chellapilla & Simard — Using Machine Learning to Break Visual HIPs</a> (NIPS). Chứng minh phần khó của captcha là <i>tách ký tự</i> (segmentation), không phải nhận dạng; từ đó Microsoft thiết kế MSN Passport captcha.</div></li>
+      <li><b class="y">2007</b><div><a href="https://acsac.org/2007/abstracts/70.html" target="_blank">Yan & El Ahmad — Breaking Visual CAPTCHAs with Naïve Pattern Recognition</a> (ACSAC). <b>Toán đơn giản</b> (đếm pixel, so khớp) + khai thác lỗi thiết kế, phá 99–100% nhiều loại captcha mà OCR chất lượng cao chịu thua.</div></li>
       <li><b class="y">2011</b><div><a href="https://www.elie.net/publication/text-based-captcha-strengths-and-weaknesses" target="_blank">Bursztein, Martin, Mitchell — Text-based CAPTCHA Strengths and Weaknesses</a> (ACM CCS). Tool Decaptcha khử nhiễu nền rồi tách từng ký tự; 13/15 loại captcha chữ của các trang lớn bị phá. Chỉ Google/reCAPTCHA trụ được.</div></li>
       <li><b class="y">2014</b><div><a href="https://arxiv.org/abs/1312.6082" target="_blank">Goodfellow và cộng sự (Google) — Multi-digit Number Recognition from Street View Imagery</a> (ICLR). Một mạng CNN đọc cả chuỗi không cần tách ký tự, đạt 99.8% trên loại reCAPTCHA chữ khó nhất.</div></li>
       <li><b class="y">2017</b><div><a href="https://doi.org/10.1126/science.aag2612" target="_blank">George và cộng sự (Vicarious) — A generative vision model that … breaks text-based CAPTCHAs</a> (Science). Mô hình RCN học từ rất ít mẫu; CNN cần lượng dữ liệu huấn luyện lớn hơn ~50.000 lần.</div></li>
+      <li><b class="y">2016</b><div><a href="https://www.ndss-symposium.org/wp-content/uploads/2017/09/simple-generic-attack-text-captchas.pdf" target="_blank">Gao, Yan và cộng sự — A Simple Generic Attack on Text Captchas</a> (NDSS). <b>Xử lý tín hiệu:</b> bộ lọc Log-Gabor (như thuật toán nhận dạng mống mắt của Daugman) tách nét theo hướng/tần số, phá captcha của Google, Microsoft, Yahoo, Amazon.</div></li>
       <li><b class="y">2018</b><div><a href="https://doi.org/10.1145/3243734.3243754" target="_blank">Ye và cộng sự — Yet Another Text Captcha Solver (GAN)</a> (ACM CCS). Học một bộ sinh captcha giả để huấn luyện, rồi tinh chỉnh bằng một ít ảnh thật; phá 33 loại captcha chữ.</div></li>
       <li><b class="y">2023</b><div><a href="https://www.usenix.org/conference/usenixsecurity23/presentation/searles" target="_blank">Searles và cộng sự — An Empirical Study & Evaluation of Modern CAPTCHAs</a> (USENIX Security). 1.400 người giải 14.000 captcha ngoài thực tế: captcha gây phiền và làm người dùng bỏ ngang, trong khi bot đã giải được.</div></li>
       <li><b class="y">2024</b><div><a href="https://arxiv.org/abs/2409.08831" target="_blank">Plesner, Vontobel, Wattenhofer (ETH Zürich) — Breaking reCAPTCHAv2</a>. Dùng YOLO giải 100% thử thách ảnh của reCAPTCHAv2; reCAPTCHAv2 thật ra dựa nhiều vào cookie và lịch sử trình duyệt để quyết định.</div></li>
