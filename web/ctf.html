@@ -32,13 +32,19 @@
   code { background:var(--bg); padding:1px 4px; border-radius:3px; font-size:12.5px; }
   .report { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-top:20px; }
   .report pre { background:var(--bg); color:var(--ink); max-height:none; }
+  .research { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-top:20px; }
+  .research ol { margin:6px 0 0; padding-left:0; list-style:none; }
+  .research li { display:grid; grid-template-columns: 56px 1fr; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+  .research li b.y { color:var(--acc); }
+  .research a { color:var(--acc); }
+  .research .lesson { background:var(--bg); border-radius:6px; padding:8px 10px; margin-top:10px; font-size:13px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Captcha Bug Bounty</h1>
   <a href="/">← Lab luồng chuẩn</a>
-  <span class="score" id="score">0/8</span>
+  <span class="score" id="score">0/9</span>
 </header>
 
 <div class="wrap">
@@ -57,6 +63,24 @@
   </div>
 
   <div class="grid" id="levels"></div>
+
+  <div class="research">
+    <h2 style="font-size:15px;margin:0 0 4px">Nghiên cứu: captcha đã bị phá như thế nào (2011 → 2026)</h2>
+    <div class="tag">Level 1–8 là lỗi logic phía server. Level 9 là lỗi của chính tấm ảnh — loại lỗi mà các nghiên cứu dưới đây đo đạc.</div>
+    <ol>
+      <li><b class="y">2011</b><div><a href="https://www.elie.net/publication/text-based-captcha-strengths-and-weaknesses" target="_blank">Bursztein, Martin, Mitchell — Text-based CAPTCHA Strengths and Weaknesses</a> (ACM CCS). Tool Decaptcha khử nhiễu nền rồi tách từng ký tự; 13/15 loại captcha chữ của các trang lớn bị phá. Chỉ Google/reCAPTCHA trụ được.</div></li>
+      <li><b class="y">2014</b><div><a href="https://arxiv.org/abs/1312.6082" target="_blank">Goodfellow và cộng sự (Google) — Multi-digit Number Recognition from Street View Imagery</a> (ICLR). Một mạng CNN đọc cả chuỗi không cần tách ký tự, đạt 99.8% trên loại reCAPTCHA chữ khó nhất.</div></li>
+      <li><b class="y">2017</b><div><a href="https://doi.org/10.1126/science.aag2612" target="_blank">George và cộng sự (Vicarious) — A generative vision model that … breaks text-based CAPTCHAs</a> (Science). Mô hình RCN học từ rất ít mẫu; CNN cần lượng dữ liệu huấn luyện lớn hơn ~50.000 lần.</div></li>
+      <li><b class="y">2018</b><div><a href="https://doi.org/10.1145/3243734.3243754" target="_blank">Ye và cộng sự — Yet Another Text Captcha Solver (GAN)</a> (ACM CCS). Học một bộ sinh captcha giả để huấn luyện, rồi tinh chỉnh bằng một ít ảnh thật; phá 33 loại captcha chữ.</div></li>
+      <li><b class="y">2023</b><div><a href="https://www.usenix.org/conference/usenixsecurity23/presentation/searles" target="_blank">Searles và cộng sự — An Empirical Study & Evaluation of Modern CAPTCHAs</a> (USENIX Security). 1.400 người giải 14.000 captcha ngoài thực tế: captcha gây phiền và làm người dùng bỏ ngang, trong khi bot đã giải được.</div></li>
+      <li><b class="y">2024</b><div><a href="https://arxiv.org/abs/2409.08831" target="_blank">Plesner, Vontobel, Wattenhofer (ETH Zürich) — Breaking reCAPTCHAv2</a>. Dùng YOLO giải 100% thử thách ảnh của reCAPTCHAv2; reCAPTCHAv2 thật ra dựa nhiều vào cookie và lịch sử trình duyệt để quyết định.</div></li>
+      <li><b class="y">2025</b><div><a href="https://www.usenix.org/conference/usenixsecurity25/presentation/teoh" target="_blank">Teoh và cộng sự — Are CAPTCHAs Still Bot-hard? (Halligan)</a> (USENIX Security). Agent dựa trên mô hình thị giác–ngôn ngữ (VLM) giải được cả loại captcha chưa từng thấy, không cần huấn luyện riêng.</div></li>
+      <li><b class="y">2025</b><div><a href="https://arxiv.org/abs/2505.24878" target="_blank">Luo và cộng sự — Open CaptchaWorld</a> (NeurIPS). Với captcha tương tác nhiều bước, agent MLLM tốt nhất chỉ đạt 40% so với 93.3% của người — dạng cần suy luận + thao tác vẫn còn khó cho máy.</div></li>
+      <li><b class="y">2025</b><div><a href="https://arxiv.org/abs/2512.02318" target="_blank">COGNITION — From Evaluation to Defense against Multimodal LLM CAPTCHA Solvers</a>. MLLM giải tốt loại nhận diện/ít tương tác với chi phí ngang dịch vụ thuê người; loại cần định vị chính xác và đếm vẫn dưới ~20%.</div></li>
+      <li><b class="y">2026</b><div><a href="https://arxiv.org/abs/2607.18659" target="_blank">Ousat và cộng sự — Broken Gates: Re-evaluating Web Bot Defenses in the Age of LLM Agents</a>. Dịch vụ giải captcha thương mại vượt gần như hoàn toàn các loại captcha thử thách với giá khoảng $0.10 / 1.000 lần.</div></li>
+    </ol>
+    <div class="lesson"><b>Bài học cho người phòng thủ:</b> tấm ảnh không còn là hàng rào chính. Logic phía server (level 1–8) vẫn phải đúng tuyệt đối, nhưng chặn bot thật sự cần thêm tín hiệu ngoài câu đố: rate limit theo tài khoản/IP, danh tiếng trình duyệt và hành vi (kiểu Turnstile/reCAPTCHA v3), xác minh danh tính cho thao tác giá trị cao, giới hạn số lượt mỗi người.</div>
+  </div>
 
   <div class="report">
     <h2 style="font-size:15px;margin:0 0 8px">Mẫu báo cáo bug bounty</h2>

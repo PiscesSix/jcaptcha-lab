@@ -1,4 +1,4 @@
-# ⚠️ SPOILER — Writeup 8 level CTF captcha
+# ⚠️ SPOILER — Writeup 9 level CTF captcha
 
 Tự chơi ở `/ctf` trước khi đọc. Mỗi level gồm: lỗi, nguyên nhân gốc trong code (`src/demo/Ctf.java`), cách khai thác, tác động và cách sửa. Bản kiểm tra đúng để đối chiếu là `Server.checkCaptcha()`:
 
@@ -100,6 +100,23 @@ Burp Suite có tính năng "Send group in parallel" (single-packet attack) dùng
 
 **Sửa:** không tin dữ liệu xác thực do client gửi lên. Nếu bắt buộc phải lưu trạng thái phía client thì phải ký bằng HMAC với khóa bí mật, có thời hạn và nonce chỉ dùng một lần. Đơn giản nhất là lưu đáp án ở server.
 
+## Level 9 — Captcha chữ "sạch" (lỗi nằm ở tấm ảnh)
+
+**Lỗi:** logic kiểm tra đúng hoàn toàn (`checkCorrectly`: gắn session, dùng 1 lần, không lộ đáp án). Nhưng ảnh chỉ là chữ đen, font mono, nền trắng, không nhiễu, nên OCR phổ thông đọc được.
+
+**Khai thác:** dùng một công cụ OCR có sẵn, không cần huấn luyện gì:
+```bash
+curl -s -b j -c j -o c.png $B/ctf/9/captcha
+tesseract c.png stdout --psm 7 -c tessedit_char_whitelist=ACDEFHJKLMNPRTWXY347
+```
+Lặp 10 lần trong 20 giây. Đo trong lab: tesseract đọc đúng **39/40** ảnh level 9, mỗi ảnh khoảng 110 ms. Với ảnh nhiễu kiểu web gốc (level 1–8), cùng lệnh đó đọc đúng **0/40**.
+
+**Liên hệ nghiên cứu:** đây là thời kỳ trước 2011, khi captcha chữ đơn giản bị OCR đọc thẳng. Ảnh nhiễu chặn được OCR phổ thông (0/40), nhưng các nghiên cứu sau đó (Bursztein 2011, Goodfellow 2014, George 2017, Ye 2018) cho thấy model huấn luyện riêng vẫn đọc được loại nhiễu. Ye 2018 còn chỉ cần một bộ sinh captcha giả và vài trăm ảnh thật. Lab này cố ý **không** làm level huấn luyện model giải ảnh nhiễu.
+
+**Tác động:** captcha chỉ còn là hình thức; bot đi qua với tốc độ của máy. Mức **Medium**: bản thân logic không sai, nhưng mục đích chống bot không đạt.
+
+**Sửa:** không có bản "sửa ảnh" nào bền lâu (xem mục nghiên cứu trên trang `/ctf`). Hướng đúng là **nhiều lớp**: giữ logic server đúng như level 1–8; rate limit theo IP *và* theo tài khoản; dùng tín hiệu hành vi và danh tiếng trình duyệt (Turnstile, reCAPTCHA v3); giới hạn số lượt mỗi người cho tài nguyên khan hiếm như lịch hẹn; xác minh danh tính (OTP, tài khoản định danh) cho thao tác giá trị cao.
+
 ---
 
 ## Bài học chung
@@ -113,3 +130,4 @@ Burp Suite có tính năng "Send group in parallel" (single-packet attack) dùng
 | Lấy và xóa nguyên tử | 7 |
 | Giới hạn số lần thử, đáp án đủ dài | 5 |
 | Không tin dữ liệu client gửi lên | 8 |
+| Ảnh captcha không phải hàng rào chính: cần thêm rate limit, tín hiệu hành vi, định danh | 9 |

@@ -20,7 +20,8 @@ import java.util.regex.Pattern;
 import nl.captcha.Captcha;
 
 /**
- * CTF "bug bounty" cho cơ chế captcha: mỗi level là một bản CỐ TÌNH CÓ LỖI của bước kiểm tra captcha.
+ * CTF "bug bounty" cho cơ chế captcha: level 1–8 là bản CỐ TÌNH CÓ LỖI của bước kiểm tra captcha;
+ * level 9 kiểm tra đúng nhưng ảnh yếu (OCR phổ thông đọc được).
  * Bản đúng nằm ở Server.checkCaptcha(). Khai thác đúng lỗi -> response trả về flag.
  *
  *   GET  /ctf/levels             danh sách level + trạng thái đã giải (theo session)
@@ -68,7 +69,11 @@ final class Ctf {
         new Level(8, "Kiểm tra bằng cookie",
             "Server không lưu gì: nó gửi md5(đáp án) vào cookie, lúc kiểm tra thì so md5(câu trả lời) với cookie.",
             "Đặt lịch thành công mà KHÔNG lấy ảnh captcha lần nào.",
-            "Cookie nằm ở phía ai? Ai được quyền sửa nó?")
+            "Cookie nằm ở phía ai? Ai được quyền sửa nó?"),
+        new Level(9, "Captcha chữ \"sạch\" (Bursztein 2011, Goodfellow 2014)",
+            "Người dùng kêu ảnh nhiễu khó đọc, dev đổi sang chữ rõ ràng trên nền trắng. Logic kiểm tra lần này ĐÚNG hoàn toàn: gắn session, dùng 1 lần, không lộ đáp án.",
+            "Đặt lịch thành công 10 lần trong vòng 20 giây (người gõ tay không kịp).",
+            "Không có lỗi logic nào cả. Thứ yếu là chính cái ảnh: một công cụ OCR có sẵn (tesseract) đọc được nó không?")
     );
 
     private static final SecureRandom R = new SecureRandom();
@@ -116,6 +121,13 @@ final class Ctf {
                     "{\"code\":\"IMAGE_SERVICE_MAINTENANCE\",\"message\":\"Dịch vụ ảnh đang bảo trì\"}");
         }
 
+        if (n == 9) {                                        // chữ sạch: logic đúng, ảnh yếu
+            String answer = cleanText();
+            s.set(k(n, "answer"), answer);
+            if (TEST) ex.getResponseHeaders().set("X-Test-Answer", answer);
+            return Server.png(ex, cleanImage(answer));
+        }
+
         Captcha c = SimpleCaptchaFactory.create(200, 60);
         String answer = c.getAnswer();
         if (TEST) ex.getResponseHeaders().set("X-Test-Answer", answer);
@@ -142,7 +154,7 @@ final class Ctf {
         boolean ok;
 
         switch (n) {
-            case 1 -> ok = checkCorrectly(s, n, resp);       // kiểm tra đúng; lỗi nằm ở chỗ lộ đáp án
+            case 1, 9 -> ok = checkCorrectly(s, n, resp);    // kiểm tra đúng; lv1 lỗi ở chỗ lộ đáp án, lv9 lỗi ở ảnh
 
             case 2 -> {                                      // LỖI: so xong không xóa đáp án
                 String expected = s == null ? null : (String) s.get(k(n, "answer"));
@@ -211,6 +223,12 @@ final class Ctf {
                 solved = recent >= 5;
                 progress = recent + "/5 lần trong 10 giây";
             }
+            case 9 -> {
+                long recent;
+                synchronized (wins) { recent = wins.stream().filter(t -> now - t <= 20_000).count(); }
+                solved = recent >= 10;
+                progress = recent + "/10 lần trong 20 giây";
+            }
             case 2 -> { int c = size(wins); solved = c >= 5 && imgs == 1; progress = c + "/5 lần, đã lấy " + imgs + " ảnh (cần đúng 1)"; }
             case 7 -> { int c = size(wins); solved = c >= 3 && imgs == 1; progress = c + "/3 lần, đã lấy " + imgs + " ảnh (cần đúng 1)"; }
             case 3, 4, 6, 8 -> { solved = imgs == 0; progress = "session này đã lấy " + imgs + " ảnh (cần 0)"; }
@@ -258,6 +276,34 @@ final class Ctf {
         if (s != null) for (String key : List.of("answer", "images", "wins")) s.remove(k(n, key));
         if (n == 6) sharedAnswer = null;
         return Server.send(ex, 200, "application/json", "{\"reset\":" + n + "}");
+    }
+
+    // ================================================================== level 9: ảnh chữ sạch
+
+    private static final char[] CLEAN_CHARS = "ACDEFHJKLMNPRTWXY347".toCharArray();
+
+    private static String cleanText() {
+        char[] c = new char[5];
+        for (int i = 0; i < c.length; i++) c[i] = CLEAN_CHARS[R.nextInt(CLEAN_CHARS.length)];
+        return new String(c);
+    }
+
+    /** Chữ đen, font mono, nền trắng, không nhiễu — kiểu captcha chữ "thân thiện" mà OCR phổ thông cũng đọc được. */
+    private static java.awt.image.BufferedImage cleanImage(String text) {
+        var img = new java.awt.image.BufferedImage(200, 60, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var g = img.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setColor(java.awt.Color.WHITE);
+        g.fillRect(0, 0, 200, 60);
+        g.setColor(new java.awt.Color(0x22, 0x22, 0x22));
+        g.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.BOLD, 32));
+        int x = 22;
+        for (char ch : text.toCharArray()) {
+            g.drawString(String.valueOf(ch), x, 42 + R.nextInt(5) - 2);
+            x += 32;
+        }
+        g.dispose();
+        return img;
     }
 
     // ================================================================== helpers

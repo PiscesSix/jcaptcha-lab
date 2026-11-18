@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ⚠️ SPOILER: lời giải tự động cho cả 8 level CTF.
+# ⚠️ SPOILER: lời giải tự động cho cả 9 level CTF.
 # Server phải chạy với CTF_TEST=1 (ảnh kèm header X-Test-Answer để script "đọc" ảnh thay người).
 # Dùng: ./tests/ctf_test.sh [base_url]
 set -uo pipefail
@@ -62,6 +62,11 @@ echo "== Level 8: tự tạo cookie captcha_hash = md5(câu trả lời)"
 H=$(printf 'abc' | md5sum | cut -d' ' -f1)
 curl -s -o $T/o8 -b "captcha_hash=$H" -F actionCode=1600 -F j_captcha_response=abc "$B/ctf/8/actions"
 F=$(flag $T/o8); [ -n "$F" ] && ok 8 "$F" || bad 8 "$(cat $T/o8)"
+
+echo "== Level 9: ảnh chữ sạch -> đọc tự động (test dùng X-Test-Answer thay cho OCR)"
+J=$T/j9
+for i in $(seq 1 10); do act 9 $J "$(cap 9 $J)" $T/o9; done
+F=$(flag $T/o9); [ -n "$F" ] && ok 9 "$F" || bad 9 "$(cat $T/o9)"
 
 echo "== Kiểm chứng: cách chơi \"bình thường\" KHÔNG ra flag"
 J=$T/jn; A=$(cap 3 $J); act 3 $J "$A" $T/on
