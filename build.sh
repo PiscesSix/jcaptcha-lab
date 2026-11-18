@@ -20,8 +20,9 @@ rm -rf out && mkdir -p out/web
 # -sourcepath: javac chỉ compile những class thư viện mà code lab thực sự dùng
 javac -nowarn -encoding UTF-8 -d out -sourcepath "$SP" src/demo/*.java
 cp -r deps/jcaptcha/jcaptcha/src/main/resources/* out/   # .properties JCaptcha cần lúc chạy
-cp web/index.html out/web/
+cp web/*.html out/web/
 echo "OK."
 echo "  Chạy lab:      DEBUG=1 java -cp out demo.Server        -> http://localhost:8080"
 echo "  Sinh ảnh mẫu:  java -cp out demo.Samples 6              (ra simple_*.png và jcaptcha_*.png)"
 echo "  Test API:      ./tests/api_test.sh http://localhost:8080   (cần server chạy với DEBUG=1)"
+echo "  CTF:           http://localhost:8080/ctf   (đáp án tự động: ./tests/ctf_test.sh — SPOILER)"

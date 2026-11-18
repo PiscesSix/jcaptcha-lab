@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Captcha Bug Bounty — CTF</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#1d1d1f; --mute:#6b6b70; --line:#e3e3e0; --ok:#1f7a4d; --bad:#b3261e; --warn:#a15c00; --acc:#22305a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); background:var(--card); display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:18px; }
+  header .score { margin-left:auto; font-weight:600; }
+  header a { color:var(--acc); font-size:13px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:16px 24px 40px; }
+  .scope { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+  .scope h2, .card h3 { margin:0 0 6px; font-size:15px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .card.solved { border-color:var(--ok); box-shadow: inset 4px 0 0 var(--ok); }
+  .tag { font-size:12px; color:var(--mute); }
+  .goal { background:var(--bg); border-radius:6px; padding:6px 8px; font-size:13px; }
+  details { font-size:13px; color:var(--mute); } summary { cursor:pointer; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  input { flex:1; min-width:90px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  button { padding:6px 10px; border:1px solid var(--line); background:#fafaf8; border-radius:6px; font:inherit; cursor:pointer; }
+  button:hover { background:#efefec; } button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  img.cap { width:200px; height:60px; border:1px solid var(--line); border-radius:4px; background:#eee; }
+  pre { margin:0; font:11.5px/1.4 ui-monospace, monospace; background:#1d1d1f; color:#e8e8e8; border-radius:6px; padding:8px; white-space:pre-wrap; word-break:break-all; max-height:180px; overflow:auto; }
+  .flagbar { display:flex; gap:8px; margin:16px 0; }
+  .msg { font-weight:600; } .ok { color:var(--ok); } .bad { color:var(--bad); }
+  code { background:var(--bg); padding:1px 4px; border-radius:3px; font-size:12.5px; }
+  .report { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-top:20px; }
+  .report pre { background:var(--bg); color:var(--ink); max-height:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Captcha Bug Bounty</h1>
+  <a href="/">← Lab luồng chuẩn</a>
+  <span class="score" id="score">0/8</span>
+</header>
+
+<div class="wrap">
+  <div class="scope">
+    <h2>Chương trình (giả lập)</h2>
+    <div>Mỗi level là một phiên bản <b>cố tình có lỗi</b> của bước kiểm tra captcha trong luồng đặt lịch. Khai thác đúng lỗi thì response trả về <code>FLAG{…}</code>, nộp flag ở ô bên dưới.</div>
+    <div class="tag" style="margin-top:6px">
+      Scope: <code>/ctf/{n}/captcha</code>, <code>/ctf/{n}/actions</code> trên lab này. Dùng DevTools, <code>curl</code>, Burp… tùy ý.
+      Bản kiểm tra <b>đúng</b> nằm ở <code>Server.checkCaptcha()</code>, đối chiếu sau khi giải xong.
+      Các kỹ thuật này chỉ dùng trên lab của mình hoặc hệ thống cho phép bằng văn bản.
+    </div>
+    <div class="flagbar">
+      <input id="flag" placeholder="FLAG{captcha-lv…}"><button class="primary" id="btnFlag">Nộp flag</button>
+      <span class="msg" id="flagMsg"></span>
+    </div>
+  </div>
+
+  <div class="grid" id="levels"></div>
+
+  <div class="report">
+    <h2 style="font-size:15px;margin:0 0 8px">Mẫu báo cáo bug bounty</h2>
+    <div class="tag" style="margin-bottom:8px">Giải xong level nào, thử viết báo cáo cho level đó theo mẫu này — kỹ năng viết báo cáo quyết định bug được nhận hay bị đóng.</div>
+<pre>Tiêu đề: [Bypass captcha] &lt;mô tả ngắn lỗi&gt; tại POST /ctf/{n}/actions
+
+Mức độ: &lt;Low / Medium / High&gt; — lý do
+
+Mô tả:
+  Lỗi gì, nằm ở đâu, vì sao xảy ra (nguyên nhân gốc).
+
+Các bước tái hiện:
+  1. ...
+  2. ...   (kèm lệnh curl / request gốc, đủ để người khác làm lại được)
+
+Tác động:
+  Kẻ tấn công làm được gì? (ví dụ: bot đặt hết lịch hẹn, spam hồ sơ, vượt rate limit…)
+
+Đề xuất sửa:
+  Sửa cụ thể ở đâu, như thế nào.</pre>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+function headersText(res) { return [...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join('\n'); }
+
+async function loadLevels() {
+  const levels = await (await fetch('/ctf/levels')).json();
+  $('score').textContent = `${levels.filter(l => l.solved).length}/${levels.length} đã giải`;
+  $('levels').innerHTML = levels.map(l => `
+    <section class="card ${l.solved ? 'solved' : ''}" id="lv${l.n}">
+      <div class="tag">Level ${l.n}${l.solved ? ' · ✅ đã giải' : ''}</div>
+      <h3>${esc(l.title)}</h3>
+      <div>${esc(l.scenario)}</div>
+      <div class="goal"><b>Mục tiêu:</b> ${esc(l.goal)}</div>
+      <details><summary>Gợi ý</summary>${esc(l.hint)}</details>
+      <div class="row"><img class="cap" id="img${l.n}" alt=""><button data-cap="${l.n}">Lấy ảnh</button></div>
+      <div class="row"><input id="ans${l.n}" placeholder="j_captcha_response"><button class="primary" data-act="${l.n}">Gửi</button><button data-reset="${l.n}">Reset</button></div>
+      <pre id="out${l.n}">// response hiện ở đây</pre>
+    </section>`).join('');
+  document.querySelectorAll('[data-cap]').forEach(b => b.onclick = () => getCaptcha(+b.dataset.cap));
+  document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => sendAction(+b.dataset.act));
+  document.querySelectorAll('[data-reset]').forEach(b => b.onclick = () => resetLevel(+b.dataset.reset));
+}
+
+async function getCaptcha(n) {
+  const res = await fetch(`/ctf/${n}/captcha`);
+  const ct = res.headers.get('content-type') || '';
+  let body = '';
+  if (ct.startsWith('image/')) { $('img' + n).src = URL.createObjectURL(await res.blob()); body = '[ảnh PNG]'; }
+  else { $('img' + n).removeAttribute('src'); body = await res.text(); }
+  $('out' + n).textContent = `GET /ctf/${n}/captcha → ${res.status}\n${headersText(res)}\n\n${body}`;
+}
+
+async function sendAction(n) {
+  const f = new FormData();
+  f.append('actionCode', '1600');
+  f.append('payload', JSON.stringify({ userClass: 'C', bookingDate: '18/11/2026', bookingTime: '09:00-10:00' }));
+  f.append('j_captcha_response', $('ans' + n).value);
+  const res = await fetch(`/ctf/${n}/actions`, { method: 'POST', body: f });
+  const text = await res.text();
+  $('out' + n).textContent = `POST /ctf/${n}/actions → ${res.status}\n\n${text}`;
+  try { const j = JSON.parse(text); if (j.flag) $('flag').value = j.flag; } catch {}
+}
+
+async function resetLevel(n) {
+  await fetch(`/ctf/${n}/reset`, { method: 'POST' });
+  $('img' + n).removeAttribute('src'); $('ans' + n).value = '';
+  $('out' + n).textContent = `level ${n} đã reset`;
+}
+
+$('btnFlag').onclick = async () => {
+  const r = await (await fetch('/ctf/flag', { method: 'POST', body: new URLSearchParams({ flag: $('flag').value }) })).json();
+  $('flagMsg').className = 'msg ' + (r.ok ? 'ok' : 'bad');
+  $('flagMsg').textContent = r.ok ? `✅ level ${r.level}` : '❌ flag sai';
+  if (r.ok) { $('flag').value = ''; loadLevels(); }
+};
+loadLevels();
+</script>
+</body>
+</html>

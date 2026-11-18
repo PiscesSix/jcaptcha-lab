@@ -18,10 +18,12 @@ jobs:
         run: ./build.sh
       - name: Start server (DEBUG=1)
         run: |
-          DEBUG=1 RATE_LIMIT=1000 nohup java -Djava.awt.headless=true -cp out demo.Server > server.log 2>&1 &
+          DEBUG=1 CTF_TEST=1 RATE_LIMIT=5000 nohup java -Djava.awt.headless=true -cp out demo.Server > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8080/health && break; sleep 1; done
       - name: API tests
         run: ./tests/api_test.sh http://localhost:8080
+      - name: CTF tests (lời giải tự động)
+        run: ./tests/ctf_test.sh http://localhost:8080
       - name: Sample images
         run: mkdir -p samples && cd samples && java -Djava.awt.headless=true -cp ../out demo.Samples 12
       - uses: actions/upload-artifact@v4

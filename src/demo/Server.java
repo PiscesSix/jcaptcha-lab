@@ -44,13 +44,15 @@ import nl.captcha.Captcha;
  *   GET  /health           ok
  *
  * Biến môi trường: PORT (8080), DEBUG (0/1), RATE_LIMIT (req/phút/IP cho ảnh + action, mặc định 60),
- *                  TRUST_PROXY (0/1: chỉ bật khi chạy sau reverse proxy), SESSION_MINUTES (30)
+ *                  TRUST_PROXY (0/1: chỉ bật khi chạy sau reverse proxy), SESSION_MINUTES (30),
+ *                  CTF (1/0: bật các level cố tình có lỗi ở /ctf — xem Ctf.java)
  */
 public class Server {
     private static final int PORT = Integer.parseInt(env("PORT", "8080"));
     private static final boolean DEBUG = env("DEBUG", "0").equals("1");
     private static final int RATE_LIMIT = Integer.parseInt(env("RATE_LIMIT", "60"));
     private static final boolean TRUST_PROXY = env("TRUST_PROXY", "0").equals("1");
+    private static final boolean CTF = env("CTF", "1").equals("1");
 
     private static final Pattern ACTION_PATH = Pattern.compile("/o/rest/v2/dossiers/(\\d+)/actions");
 
@@ -59,7 +61,7 @@ public class Server {
     private static final String ATTR_SIMPLE = "_SIMPLE_CAPTCHA";
     private static final String ATTR_DEBUG_ANSWER = "_DEBUG_ANSWER";
 
-    private static final SessionStore SESSIONS = new SessionStore(Long.parseLong(env("SESSION_MINUTES", "30")));
+    static final SessionStore SESSIONS = new SessionStore(Long.parseLong(env("SESSION_MINUTES", "30")));
 
     // JCaptcha: dùng chính session id làm captcha id (OpenCPS: captchaId = request.getSession().getId())
     private static final DefaultManageableImageCaptchaService JCAPTCHA = new DefaultManageableImageCaptchaService(
@@ -76,8 +78,8 @@ public class Server {
         s.createContext("/", Server::handle);
         s.setExecutor(Executors.newFixedThreadPool(16));
         s.start();
-        System.out.printf("Captcha Lab: http://localhost:%d  (DEBUG=%s, RATE_LIMIT=%d req/min/IP, TRUST_PROXY=%s)%n",
-                PORT, DEBUG, RATE_LIMIT, TRUST_PROXY);
+        System.out.printf("Captcha Lab: http://localhost:%d  (DEBUG=%s, RATE_LIMIT=%d req/min/IP, TRUST_PROXY=%s, CTF=%s)%n",
+                PORT, DEBUG, RATE_LIMIT, TRUST_PROXY, CTF);
     }
 
     // ================================================================== routing
@@ -103,7 +105,9 @@ public class Server {
         if (m.equals("HEAD")) m = "GET";   // HEAD xử lý như GET, send() bỏ body
         Matcher action = ACTION_PATH.matcher(path);
 
-        if (m.equals("GET") && path.equals("/")) return page(ex);
+        if (m.equals("GET") && path.equals("/")) return page(ex, "/web/index.html");
+        if (CTF && m.equals("GET") && (path.equals("/ctf") || path.equals("/ctf/"))) return page(ex, "/web/ctf.html");
+        if (CTF && path.startsWith("/ctf/")) return Ctf.handle(ex, path, m);   // các level cố tình có lỗi
         if (m.equals("GET") && path.equals("/health")) return send(ex, 200, "text/plain", "ok");
         if (m.equals("GET") && path.equals("/favicon.ico")) { ex.sendResponseHeaders(204, -1); return 204; }
         if (m.equals("GET") && path.equals("/o/rest/v2/applicants/simplecaptchanew")) return limited(ex) ? 429 : simpleCaptcha(ex);
@@ -215,9 +219,9 @@ public class Server {
                 + "}");
     }
 
-    private static int page(HttpExchange ex) throws IOException {
-        try (InputStream in = Server.class.getResourceAsStream("/web/index.html")) {
-            if (in == null) return send(ex, 500, "text/plain", "web/index.html not found in classpath");
+    private static int page(HttpExchange ex, String resource) throws IOException {
+        try (InputStream in = Server.class.getResourceAsStream(resource)) {
+            if (in == null) return send(ex, 500, "text/plain", resource + " not found in classpath");
             return send(ex, 200, "text/html; charset=utf-8", in.readAllBytes());
         }
     }
@@ -225,7 +229,7 @@ public class Server {
     // ================================================================== session / cookie
 
     /** Đọc session từ cookie JSESSIONID; create=true thì tạo mới và Set-Cookie nếu chưa có. */
-    private static SessionStore.Session session(HttpExchange ex, boolean create) {
+    static SessionStore.Session session(HttpExchange ex, boolean create) {
         String id = cookie(ex, "JSESSIONID");
         SessionStore.Session s = SESSIONS.find(id);
         if (s == null && create) {
@@ -237,7 +241,7 @@ public class Server {
         return s;
     }
 
-    private static String cookie(HttpExchange ex, String name) {
+    static String cookie(HttpExchange ex, String name) {
         List<String> headers = ex.getRequestHeaders().get("Cookie");
         if (headers == null) return null;
         for (String h : headers)
@@ -250,7 +254,7 @@ public class Server {
 
     // ================================================================== helpers
 
-    private static int png(HttpExchange ex, BufferedImage img) throws IOException {
+    static int png(HttpExchange ex, BufferedImage img) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ImageIO.write(img, "png", bos);
         ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + System.currentTimeMillis() + ".png\"");
@@ -286,7 +290,7 @@ public class Server {
     }
 
     /** Đọc body: application/x-www-form-urlencoded hoặc multipart/form-data (chỉ field text). */
-    private static Map<String, String> body(HttpExchange ex) throws IOException {
+    static Map<String, String> body(HttpExchange ex) throws IOException {
         byte[] raw = ex.getRequestBody().readAllBytes();
         String ct = String.valueOf(ex.getRequestHeaders().getFirst("Content-Type"));
         Map<String, String> m = new HashMap<>();
@@ -317,7 +321,7 @@ public class Server {
      * IP cho rate limit. Chỉ tin X-Forwarded-For khi TRUST_PROXY=1 (app nằm sau proxy);
      * nếu không, client tự gửi IP giả mỗi lần để né rate limit.
      */
-    private static String ip(HttpExchange ex) {
+    static String ip(HttpExchange ex) {
         if (TRUST_PROXY) {
             String fwd = ex.getRequestHeaders().getFirst("X-Forwarded-For");
             if (fwd != null && !fwd.isBlank()) return fwd.split(",")[0].trim();
@@ -325,15 +329,15 @@ public class Server {
         return ex.getRemoteAddress().getAddress().getHostAddress();
     }
 
-    private static String esc(String s) {
+    static String esc(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ").replace("\r", " ");
     }
 
-    private static int send(HttpExchange ex, int code, String type, String body) throws IOException {
+    static int send(HttpExchange ex, int code, String type, String body) throws IOException {
         return send(ex, code, type, body.getBytes(StandardCharsets.UTF_8));
     }
 
-    private static int send(HttpExchange ex, int code, String type, byte[] body) throws IOException {
+    static int send(HttpExchange ex, int code, String type, byte[] body) throws IOException {
         ex.getResponseHeaders().set("Content-Type", type);
         if (ex.getRequestMethod().equals("HEAD")) {
             ex.sendResponseHeaders(code, -1);

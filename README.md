@@ -60,6 +60,8 @@ Online: Render (`render.yaml`, gói free) hoặc GitHub Codespaces (`.devcontain
 | `RATE_LIMIT` | 60 | request ảnh + action / phút / IP, vượt thì 429 |
 | `TRUST_PROXY` | 0 | `1` = lấy IP từ `X-Forwarded-For`. Chỉ bật khi chạy sau reverse proxy |
 | `SESSION_MINUTES` | 30 | session không dùng quá thời gian này thì bị xóa |
+| `CTF` | 1 | `0` = tắt các level cố tình có lỗi ở `/ctf` |
+| `CTF_TEST` | 0 | `1` = ảnh CTF kèm header đáp án, chỉ dùng cho `tests/ctf_test.sh`. Bật khi chơi là lộ đáp án |
 
 ## API
 
@@ -90,6 +92,25 @@ Captcha.Builder(200, 60)
 
 Cả hai bỏ ký tự dễ nhầm (`0 o O 1 l i I j 2 z 5 s 6 b 8 B 9 g q u v r`).
 
+## CTF bug bounty (`/ctf`)
+
+8 level, mỗi level là một phiên bản **cố tình có lỗi** của bước kiểm tra captcha. Khai thác đúng lỗi thì response trả về `FLAG{…}`. Flag được sinh ngẫu nhiên mỗi lần khởi động server.
+
+| Level | Chủ đề |
+|---|---|
+| 1 | Token lạ trong response |
+| 2 | Captcha dùng mãi |
+| 3 | Field không bắt buộc |
+| 4 | Chuỗi "null" |
+| 5 | Ảnh đang bảo trì |
+| 6 | Đáp án dùng chung |
+| 7 | Race condition |
+| 8 | Kiểm tra bằng cookie |
+
+Trang `/ctf` có gợi ý từng level và mẫu viết báo cáo bug bounty. Lời giải: `docs/CTF_WRITEUP.md` và `tests/ctf_test.sh` (**spoiler**). Chạy test: `CTF_TEST=1 DEBUG=1 java -cp out demo.Server` rồi `./tests/ctf_test.sh`.
+
+Các kỹ thuật trong CTF chỉ dùng trên lab của mình hoặc hệ thống cho phép bằng văn bản.
+
 ## File
 
 | File | Vai trò |
@@ -102,3 +123,7 @@ Cả hai bỏ ký tự dễ nhầm (`0 o O 1 l i I j 2 z 5 s 6 b 8 B 9 g q u v r
 | `src/demo/RecordingWordGenerator.java` | ghi lại đáp án JCaptcha cho chế độ DEBUG |
 | `web/index.html` | trang lab: makeImageCap → blob URL, form multipart, thử replay / không cookie / thiếu field |
 | `tests/api_test.sh` | 27 test luồng session bằng curl |
+| `src/demo/Ctf.java` | 8 level CTF cố tình có lỗi |
+| `web/ctf.html` | trang CTF: level, gợi ý, nộp flag, mẫu báo cáo |
+| `tests/ctf_test.sh` | lời giải tự động 8 level (spoiler) |
+| `docs/CTF_WRITEUP.md` | writeup: lỗi, nguyên nhân, khai thác, tác động, cách sửa (spoiler) |
