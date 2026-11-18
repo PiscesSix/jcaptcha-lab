@@ -1,87 +1,104 @@
-# JCaptcha Lab
+# Captcha Lab
 
-Dựng lại captcha kiểu "chữ màu + chùm đường xám + nền xước" (200×60) bằng **JCaptcha 2.0**, kèm trang web để test captcha, test ảnh và test request.
+Mô phỏng cách một hệ thống kiểu **OpenCPS** (dịch vụ công trên Liferay, Java) dùng captcha: **captcha gắn với session**, ảnh trả thẳng PNG, đáp án gửi kèm form qua field `j_captcha_response`. Có cả 2 engine: **SimpleCaptcha** (`simplecaptchanew`) và **JCaptcha** (`jcaptcha`), cùng một trang web để test captcha, test ảnh và test request.
+
+> Dữ liệu (hồ sơ, lịch hẹn) đều là giả lập trong bộ nhớ. Lab này để học cách captcha + session hoạt động.
+
+## Luồng hoạt động
+
+```
+Trình duyệt                                   Server
+───────────                                   ──────
+click ↻ → makeImageCap()
+GET /o/rest/v2/applicants/simplecaptchanew ─▶ lấy session theo cookie JSESSIONID
+                                              (chưa có → tạo mới, Set-Cookie: JSESSIONID=…; HttpOnly)
+                                              SimpleCaptcha sinh ảnh + đáp án
+                                              session["_SIMPLE_CAPTCHA"] = đáp án
+           ◀───────────────────────────────── 200 image/png
+                                              Content-Disposition: attachment; filename="<millis>.png"
+URL.createObjectURL(blob)
+→ <img src="blob:https://host/<uuid>">        (UUID do trình duyệt sinh, server không biết)
+
+người dùng gõ mã
+POST /o/rest/v2/dossiers/701013/actions ────▶ lấy session theo cookie
+  multipart: actionCode=1600, payment,        lấy + XÓA đáp án trong session
+  assignUsers, actionNote,                    so j_captcha_response (không phân biệt hoa thường)
+  payload={"userClass":"C",…},                đúng → xử lý action, sai → 403 CAPTCHA_INVALID
+  j_captcha_response=pxjnd
+  (cookie JSESSIONID tự gửi kèm)
+           ◀───────────────────────────────── 200 {"status":"done",…}  |  403 {"code":"CAPTCHA_INVALID","reason":…}
+```
+
+Với `jcaptcha`, captcha id chính là session id (`getImageChallengeForID(sessionId)`, giống OpenCPS), đáp án nằm trong store của JCaptcha thay vì thuộc tính session.
+
+Hệ quả của thiết kế này:
+- **Đáp án không bao giờ rời server.** Trình duyệt chỉ có ảnh và cookie; cookie HttpOnly nên JavaScript cũng không đọc được.
+- **Ảnh và form phải cùng session.** Không gửi cookie → `no_session`. Đáp án của session A gửi bằng session B → sai.
+- **Mỗi lần lấy ảnh ghi đè đáp án cũ.** Bấm ↻ thì đáp án của ảnh trước mất hiệu lực.
+- **Dùng 1 lần.** Kiểm tra xong (đúng hay sai) đáp án bị xóa; gửi lại (replay) → `no_captcha`.
+- **Tải ảnh không cần đăng nhập** là bình thường: captcha phục vụ người chưa có tài khoản. Thứ cần bảo vệ là đáp án và bước kiểm tra.
 
 ## Chạy
 
 Cần JDK 17+ và git.
 
 ```bash
-./build.sh                                  # clone JCaptcha + lib phụ, compile
+./build.sh                                  # clone SimpleCaptcha, JCaptcha + lib phụ, compile
 DEBUG=1 java -cp out demo.Server            # http://localhost:8080
-./tests/api_test.sh http://localhost:8080   # 16 test API (cần DEBUG=1)
-java -cp out demo.Samples 10                # sinh ảnh mẫu ra thư mục hiện tại
+./tests/api_test.sh http://localhost:8080   # 27 test bằng curl + cookie jar (cần DEBUG=1)
+java -cp out demo.Samples 6                 # ảnh mẫu simple_*.png, jcaptcha_*.png
 ```
 
-Hoặc chạy bằng Docker:
+Docker: `docker build -t captcha-lab . && docker run -p 8080:8080 -e DEBUG=1 captcha-lab`
 
-```bash
-docker build -t jcaptcha-lab .
-docker run -p 8080:8080 -e DEBUG=1 jcaptcha-lab
-```
-
-## Chạy online
-
-**GitHub Codespaces** (free 60 giờ/tháng với máy 2 nhân): trên trang repo bấm **Code → Codespaces → Create codespace on main**.
-Codespace tự cài font, build và chạy server với `DEBUG=1`, rồi mở cổng 8080 trên trình duyệt (nếu không tự mở: tab **Ports** → 8080 → biểu tượng quả cầu).
-Cổng mặc định là private, phải đăng nhập GitHub mới vào được; muốn gửi link cho người khác thì chuột phải → Port Visibility → Public.
-Log server nằm ở `server.log`. Codespace tự tắt sau khoảng 30 phút không dùng; mở lại thì server tự chạy lại.
-
-**Render** (free, có link cố định): dashboard.render.com → **New → Blueprint** → chọn repo này. Render đọc `render.yaml` và build từ `Dockerfile`.
-Gói free tự tắt sau 15 phút không có request, request đầu tiên sau đó phải chờ khoảng 1 phút để khởi động lại.
-
-Biến môi trường:
+Online: Render (`render.yaml`, gói free) hoặc GitHub Codespaces (`.devcontainer`).
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
 | `PORT` | 8080 | cổng |
-| `DEBUG` | 0 | `1` = bật `/api/debug/answer/<id>` để xem đáp án (chỉ dùng khi test) |
-| `RATE_LIMIT` | 60 | số request ảnh + verify / phút / IP, vượt thì trả 429 |
-| `TRUST_PROXY` | 0 | `1` = lấy IP từ `X-Forwarded-For`. Chỉ bật khi chạy sau reverse proxy, nếu không client gửi IP giả để né rate limit |
+| `DEBUG` | 0 | `1` = `/api/session` trả kèm đáp án đang lưu trong session (chỉ dùng khi test) |
+| `RATE_LIMIT` | 60 | request ảnh + action / phút / IP, vượt thì 429 |
+| `TRUST_PROXY` | 0 | `1` = lấy IP từ `X-Forwarded-For`. Chỉ bật khi chạy sau reverse proxy |
+| `SESSION_MINUTES` | 30 | session không dùng quá thời gian này thì bị xóa |
 
 ## API
 
-| Method | Path | Trả về |
+| Method | Path | Ghi chú |
 |---|---|---|
-| GET | `/rest/v2/applicants/jcaptcha` | `{"id":"<uuid>"}` |
-| GET | `/<uuid>` | `image/png` 200×60, `Cache-Control: no-store` |
-| POST | `/rest/v2/applicants/jcaptcha/verify` | body form hoặc JSON `id`, `answer` → `{"ok":bool,"reason":"correct\|wrong\|unknown_id\|missing_fields"}` |
-| GET | `/api/stats` | thống kê của JCaptcha service |
-| GET | `/api/debug/answer/<uuid>` | đáp án (chỉ khi `DEBUG=1`) |
+| GET | `/o/rest/v2/applicants/simplecaptchanew[?width=&height=]` | PNG (SimpleCaptcha), mặc định 200×60, đáp án vào session |
+| GET | `/o/rest/v2/applicants/jcaptcha[?width=&height=]` | PNG (JCaptcha), captcha id = session id |
+| POST | `/o/rest/v2/dossiers/{id}/actions` | multipart hoặc form-urlencoded: `actionCode`, `payment`, `assignUsers`, `actionNote`, `payload`, `j_captcha_response` |
+| GET | `/api/session` | session hiện tại (`DEBUG=1`: kèm đáp án) |
+| GET | `/api/stats` | thống kê |
 | GET | `/health` | `ok` |
 
-Hành vi của JCaptcha cần nhớ:
-- Gọi ảnh lần 2 với cùng id thì JCaptcha **sinh captcha mới**, đáp án cũ mất hiệu lực.
-- Verify **luôn xóa** captcha, dù đúng hay sai, nên mỗi captcha chỉ thử được 1 lần.
-- Id chưa từng gọi ảnh, đã verify, hoặc đã bị dọn đều trả `unknown_id`.
-- So đáp án không phân biệt hoa thường.
+Lý do từ chối (`reason` trong body 403): `wrong` sai mã · `no_captcha` session chưa có captcha hoặc đã dùng · `no_session` không có cookie / session hết hạn · `missing` thiếu `j_captcha_response`.
 
-## Luồng tạo ảnh
+## Cách ảnh được tạo
 
+**SimpleCaptcha** (`SimpleCaptchaFactory.java`) — khung `Captcha.Builder` của thư viện, 4 khối tự viết cắm vào:
 ```
-Service (DefaultManageableImageCaptchaService + FastHashMapCaptchaStore)   lưu id → captcha, tự dọn
- └─ SiteLikeEngine
-     └─ GimpyFactory = WordGenerator + WordToImage
-         1. RandomWordGenerator        sinh 6 ký tự (đáp án)
-         2. RandomFontGenerator        font sans đậm 28–36px, chọn riêng cho từng ký tự
-         3. ScratchWavyBackground *    nền: xước + bụi + 2 đường sin cố định + đường lượn   (dưới chữ)
-         4. GlyphsPaster               dán chữ, mỗi chữ 1 màu
-              visitors: lệch dọc, xoay ±10°, giãn cách, đặt vị trí
-              decorator WavyBandDecorator *  chùm đường xám ngang giữa ảnh                  (đè lên chữ)
-         5. Deformation                làm mờ 3×3
+Captcha.Builder(200, 60)
+  .addText(RandomTextProducer, UprightWordRenderer)  sinh 6 ký tự; vẽ chữ đứng, mỗi chữ 1 màu/1 cỡ, xếp sát theo bề rộng thật
+  .addNoise(ThickBandNoise)                          chùm đường xám dày đè LÊN chữ
+  .addBackground(SpeckleArcBackground)               nền lấm tấm, vết xước, 2 đường cố định, cung tròn (DƯỚI chữ)
+  .build()                                           dán lớp chữ+nhiễu lên lớp nền
 ```
-`*` = tự viết, cắm vào JCaptcha qua interface `BackgroundGenerator` / `GlyphsDecorator`. Các khối còn lại là của JCaptcha.
+`DefaultTextProducer` của SimpleCaptcha có lỗi: ký tự đầu tiên của bộ ký tự không bao giờ được chọn, nên lab dùng producer riêng.
+
+**JCaptcha** (`SiteLikeEngine.java`) — `GimpyFactory = WordGenerator + WordToImage`; `WordToImage = FontGenerator + BackgroundGenerator + TextPaster(visitors, decorators) + Deformation`. Nền (`ScratchWavyBackground`) và decorator (`WavyBandDecorator`) tự viết.
+
+Cả hai bỏ ký tự dễ nhầm (`0 o O 1 l i I j 2 z 5 s 6 b 8 B 9 g q u v r`).
 
 ## File
 
 | File | Vai trò |
 |---|---|
-| `src/demo/SiteLikeEngine.java` | lắp engine: chỉnh màu, font, số đường nhiễu ở đây |
-| `src/demo/ScratchWavyBackground.java` | nền |
-| `src/demo/WavyBandDecorator.java` | chùm đường đè lên chữ |
-| `src/demo/WavyLines.java` | hàm vẽ đường lượn (tổng 2 sóng sin) |
-| `src/demo/RecordingWordGenerator.java` | ghi lại đáp án cho chế độ DEBUG (production không cần) |
-| `src/demo/Server.java` | HTTP server, rate limit, log request |
-| `web/index.html` | trang lab |
-| `tests/api_test.sh` | test API bằng curl |
-| `.github/workflows/ci.yml` | mỗi lần push: build, chạy test, upload ảnh mẫu thành artifact |
+| `src/demo/Server.java` | HTTP server: session/cookie, 2 endpoint captcha, dossier action, rate limit, log |
+| `src/demo/SessionStore.java` | mô phỏng HttpSession: id ngẫu nhiên, thuộc tính, hết hạn |
+| `src/demo/SimpleCaptchaFactory.java` | engine SimpleCaptcha |
+| `src/demo/SiteLikeEngine.java` + `ScratchWavyBackground` + `WavyBandDecorator` | engine JCaptcha |
+| `src/demo/WavyLines.java` | vẽ đường lượn (tổng 2 sóng sin) |
+| `src/demo/RecordingWordGenerator.java` | ghi lại đáp án JCaptcha cho chế độ DEBUG |
+| `web/index.html` | trang lab: makeImageCap → blob URL, form multipart, thử replay / không cookie / thiếu field |
+| `tests/api_test.sh` | 27 test luồng session bằng curl |
